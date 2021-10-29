@@ -22,6 +22,7 @@ import javax.inject.Named;
 import javax.inject.Singleton;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,34 +36,68 @@ import static java.util.Optional.ofNullable;
 @Singleton
 public class ArtifactTrackerEventSpy extends AbstractEventSpy {
 
+    private boolean enabled;
+
+    private String httpApiEndpointURI;
+
+    private boolean httpApiBasicAuth;
+
+    private String username;
+
+    private String password;
+
     private Logger logger;
+
     private String buildVcsNumber;
+
     private String teamcityBuildId;
+
     private String teamcityBuildConfName;
+
     private String teamcityProjectName;
+
     private boolean teamcityPropertiesAvailable;
 
     @Override
     public void init(Context context) throws Exception {
 
-        final Map<String, Object> data = context.getData();
-        final MutablePlexusContainer container = (DefaultPlexusContainer) data.get("plexus");
-        logger = requireNonNull(container.getLogger());
+        final Path path = Paths.get(System.getProperty("user.home"), ".maven-artifact-tracker.properties");
+        if (Files.isRegularFile(path)) {
+            final Properties config = new Properties();
+            try (InputStream in = Files.newInputStream(path)) {
+                config.load(in);
+            }
 
-        final Object systemProperties = data.get("systemProperties");
-        if (systemProperties instanceof Properties) {
-            final Properties p = (Properties) systemProperties;
-            final String property = p.getProperty("env.TEAMCITY_BUILD_PROPERTIES_FILE");
-            if (property != null) {
-                final Properties properties = new Properties();
-                try (InputStream in = Files.newInputStream(Paths.get(property))) {
-                    properties.load(in);
+            enabled = Boolean.parseBoolean(config.getProperty("enabled"));
+            if (enabled) {
+
+                httpApiEndpointURI = requireNonNull(config.getProperty("httpApiBaseURI")) + "/api/track";
+                httpApiBasicAuth = Boolean.parseBoolean(config.getProperty("httpApiBasicAuth"));
+                if (httpApiBasicAuth) {
+                    username = requireNonNull(config.getProperty("username"));
+                    password = requireNonNull(config.getProperty("password"));
                 }
-                buildVcsNumber = properties.getProperty("build.vcs.number");
-                teamcityBuildId = properties.getProperty("teamcity.build.id");
-                teamcityBuildConfName = properties.getProperty("teamcity.buildConfName");
-                teamcityProjectName = properties.getProperty("teamcity.projectName");
-                teamcityPropertiesAvailable = true;
+
+                final Map<String, Object> data = context.getData();
+                final MutablePlexusContainer container = (DefaultPlexusContainer) data.get("plexus");
+                logger = requireNonNull(container.getLogger());
+
+                final Object systemProperties = data.get("systemProperties");
+                if (systemProperties instanceof Properties) {
+                    final Properties p = (Properties) systemProperties;
+                    final String property = p.getProperty("env.TEAMCITY_BUILD_PROPERTIES_FILE");
+                    if (property != null) {
+                        final Properties properties = new Properties();
+                        try (InputStream in = Files.newInputStream(Paths.get(property))) {
+                            properties.load(in);
+                        }
+                        buildVcsNumber = properties.getProperty("build.vcs.number");
+                        teamcityBuildId = properties.getProperty("teamcity.build.id");
+                        teamcityBuildConfName = properties.getProperty("teamcity.buildConfName");
+                        teamcityProjectName = properties.getProperty("teamcity.projectName");
+                        teamcityPropertiesAvailable = true;
+                    }
+                }
             }
         }
     }
@@ -71,7 +106,7 @@ public class ArtifactTrackerEventSpy extends AbstractEventSpy {
     public void onEvent(Object event) {
 
         try {
-            if (event instanceof RepositoryEvent) {
+            if (enabled && event instanceof RepositoryEvent) {
                 final RepositoryEvent re = (RepositoryEvent) event;
                 if (re.getType() == RepositoryEvent.EventType.ARTIFACT_DEPLOYED) {
                     final Exception exception = re.getException();
@@ -106,11 +141,12 @@ public class ArtifactTrackerEventSpy extends AbstractEventSpy {
                             }
 
                             try (CloseableHttpClient client = HttpClients.createDefault()) {
-                                final HttpPost httpPost = new HttpPost("https://node3.trade-mate.io/tracker/api/track");
+                                final HttpPost httpPost = new HttpPost(httpApiEndpointURI);
 
-                                httpPost.addHeader(new BasicScheme().authenticate(
-                                        new UsernamePasswordCredentials("alexey.romenskiy@gmail.com", "DW]cidCs!Bq9"),
-                                        httpPost, null));
+                                if (httpApiBasicAuth) {
+                                    httpPost.addHeader(new BasicScheme().authenticate(
+                                            new UsernamePasswordCredentials(username, password), httpPost, null));
+                                }
 
                                 httpPost.setEntity(new StringEntity(getBodyAsString(body), UTF_8));
                                 httpPost.setHeader("Accept", "application/json");
