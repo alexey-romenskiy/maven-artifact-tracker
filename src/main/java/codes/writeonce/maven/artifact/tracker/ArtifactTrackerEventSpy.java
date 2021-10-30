@@ -201,6 +201,6 @@ public class ArtifactTrackerEventSpy extends AbstractEventSpy {
     }
 
     private String trimToNull(String value) {
-        return value.isEmpty() ? null : value;
+        return value == null || value.isEmpty() ? null : value;
     }
 }
