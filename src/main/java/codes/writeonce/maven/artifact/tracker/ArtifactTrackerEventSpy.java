@@ -114,20 +114,20 @@ public class ArtifactTrackerEventSpy extends AbstractEventSpy {
                         final Artifact artifact = re.getArtifact();
                         try {
                             final Map<String, Object> body = new HashMap<>();
-                            ofNullable(artifact.getGroupId()).map(this::trimToNull)
+                            ofNullable(artifact.getGroupId()).map(this::emptyToNull)
                                     .ifPresent(v -> body.put("groupId", v));
-                            ofNullable(artifact.getArtifactId()).map(this::trimToNull)
+                            ofNullable(artifact.getArtifactId()).map(this::emptyToNull)
                                     .ifPresent(v -> body.put("artifactId", v));
-                            ofNullable(artifact.getClassifier()).map(this::trimToNull)
+                            ofNullable(artifact.getClassifier()).map(this::emptyToNull)
                                     .ifPresent(v -> body.put("classifier", v));
-                            ofNullable(artifact.getExtension()).map(this::trimToNull)
+                            ofNullable(artifact.getExtension()).map(this::emptyToNull)
                                     .ifPresent(v -> body.put("extension", v));
-                            ofNullable(artifact.getBaseVersion()).map(this::trimToNull)
+                            ofNullable(artifact.getBaseVersion()).map(this::emptyToNull)
                                     .ifPresent(v -> body.put("baseVersion", v));
-                            ofNullable(artifact.getVersion()).map(this::trimToNull)
+                            ofNullable(artifact.getVersion()).map(this::emptyToNull)
                                     .ifPresent(v -> body.put("version", v));
                             body.put("snapshot", artifact.isSnapshot());
-                            ofNullable(re.getRepository()).map(this::getUrl).map(this::trimToNull)
+                            ofNullable(re.getRepository()).map(this::getUrl).map(this::emptyToNull)
                                     .ifPresent(v -> body.put("url", v));
                             if (teamcityPropertiesAvailable) {
                                 final Map<String, Object> teamcityInfo = new HashMap<>();
@@ -200,7 +200,7 @@ public class ArtifactTrackerEventSpy extends AbstractEventSpy {
         return url;
     }
 
-    private String trimToNull(String value) {
+    private String emptyToNull(String value) {
         return value == null || value.isEmpty() ? null : value;
     }
 }
